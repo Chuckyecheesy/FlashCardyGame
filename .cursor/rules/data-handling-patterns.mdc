@@ -1,0 +1,328 @@
+---
+alwaysApply: true
+---
+# Data Handling Patterns
+
+This project follows strict patterns for data operations to ensure type safety, security, and proper separation of concerns.
+
+## Database Query Organization
+
+ALL database operations MUST be organized through helper functions in the `db/queries` directory. Never write raw database queries directly in components or server actions.
+
+### Query Directory Structure
+
+```
+db/
+├── queries/
+│   ├── decks.ts      # All deck-related queries
+│   ├── cards.ts      # All card-related queries
+│   ├── sessions.ts   # All study session queries
+│   └── stats.ts      # All statistics queries
+```
+
+## Data Retrieval - Server Components with Query Helpers
+
+All database queries and data fetching MUST be done in Server Components using helper functions from `db/queries`, never in Client Components.
+
+```typescript
+// ✅ GOOD - Server Component using query helper
+import { getUserDecks } from '@/db/queries/decks'
+import { auth } from '@clerk/nextjs/server'
+
+export default async function DecksPage() {
+  const { userId } = auth()
+  if (!userId) redirect('/')
+  
+  const decks = await getUserDecks(userId)
+  return <DecksList decks={decks} />
+}
+
+// ✅ GOOD - Query helper in db/queries/decks.ts
+import { db, decksTable } from '@/db'
+import { eq } from 'drizzle-orm'
+
+export async function getUserDecks(userId: string) {
+  return await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.user_id, userId))
+}
+
+// ❌ BAD - Direct database query in component
+export default async function DecksPage() {
+  const { userId } = auth()
+  
+  const decks = await db  // Never write queries directly in components
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.user_id, userId))
+}
+
+// ❌ BAD - Client Component trying to fetch data
+'use client'
+import { useEffect, useState } from 'react'
+
+export default function DecksPage() {
+  const [decks, setDecks] = useState([])
+  
+  useEffect(() => {
+    // Never do database queries in client components
+    fetchDecks().then(setDecks)
+  }, [])
+}
+```
+
+## Database Mutations - Server Actions with Query Helpers
+
+All database inserts, updates, and deletes MUST be done via Server Actions using helper functions from `db/queries` with proper validation.
+
+```typescript
+// ✅ GOOD - Server Action using query helper
+'use server'
+import { z } from 'zod'
+import { createDeckForUser } from '@/db/queries/decks'
+import { auth } from '@clerk/nextjs/server'
+
+const CreateDeckSchema = z.object({
+  title: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  isPublic: z.boolean().default(false)
+})
+
+type CreateDeckInput = z.infer<typeof CreateDeckSchema>
+
+export async function createDeck(input: CreateDeckInput) {
+  const { userId } = auth()
+  if (!userId) throw new Error('Unauthorized')
+  
+  // Validate input with Zod
+  const validatedData = CreateDeckSchema.parse(input)
+  
+  // Use query helper for database operation
+  return await createDeckForUser(userId, validatedData)
+}
+
+// ✅ GOOD - Mutation helper in db/queries/decks.ts
+import { db, decksTable } from '@/db'
+
+export async function createDeckForUser(
+  userId: string, 
+  deckData: { title: string; description?: string; isPublic: boolean }
+) {
+  const result = await db
+    .insert(decksTable)
+    .values({
+      ...deckData,
+      user_id: userId
+    })
+    .returning()
+    
+  return result[0]
+}
+
+// ❌ BAD - Direct database operation in server action
+export async function createDeck(input: CreateDeckInput) {
+  const validatedData = CreateDeckSchema.parse(input)
+  
+  const result = await db  // Never write queries directly in server actions
+    .insert(decksTable)
+    .values({
+      ...validatedData,
+      user_id: userId
+    })
+    .returning()
+}
+
+// ❌ BAD - Using FormData as type
+export async function createDeck(formData: FormData) {
+  // Never use FormData as the parameter type
+}
+
+// ❌ BAD - No validation
+export async function createDeck(input: any) {
+  // Never skip Zod validation
+  await db.insert(decksTable).values(input)
+}
+```
+
+## Data Validation - Always Use Zod
+
+ALL data passed to server actions MUST be validated using Zod schemas with proper TypeScript types, then passed to query helpers.
+
+```typescript
+// ✅ GOOD - Proper Zod schema and TypeScript types with query helper
+import { z } from 'zod'
+import { updateUserCard } from '@/db/queries/cards'
+
+const UpdateCardSchema = z.object({
+  id: z.string().uuid(),
+  front: z.string().min(1).max(1000),
+  back: z.string().min(1).max(1000),
+  order: z.number().int().positive().optional()
+})
+
+type UpdateCardInput = z.infer<typeof UpdateCardSchema>
+
+export async function updateCard(input: UpdateCardInput) {
+  const { userId } = auth()
+  if (!userId) throw new Error('Unauthorized')
+  
+  const validatedData = UpdateCardSchema.parse(input)
+  
+  // Use query helper for database operation
+  return await updateUserCard(userId, validatedData.id, validatedData)
+}
+
+// ✅ GOOD - Update helper in db/queries/cards.ts
+import { db, cardsTable } from '@/db'
+import { eq, and } from 'drizzle-orm'
+
+export async function updateUserCard(
+  userId: string, 
+  cardId: string, 
+  updates: { front: string; back: string; order?: number }
+) {
+  return await db
+    .update(cardsTable)
+    .set(updates)
+    .where(and(
+      eq(cardsTable.id, cardId),
+      eq(cardsTable.user_id, userId) // Ensure user owns the card
+    ))
+    .returning()
+}
+
+// ❌ BAD - No Zod validation
+export async function updateCard(input: {
+  id: string
+  front: string
+  back: string
+}) {
+  // Missing Zod validation
+}
+
+// ❌ BAD - Using FormData type
+export async function updateCard(formData: FormData) {
+  // Never use FormData as parameter type
+}
+```
+
+## Complete Example Pattern
+
+```typescript
+// Server Action (app/actions/study.ts)
+'use server'
+import { z } from 'zod'
+import { recordUserStudySession } from '@/db/queries/sessions'
+import { auth } from '@clerk/nextjs/server'
+
+const StudySessionSchema = z.object({
+  deckId: z.string().uuid(),
+  cardId: z.string().uuid(),
+  correct: z.boolean(),
+  responseTime: z.number().positive()
+})
+
+type StudySessionInput = z.infer<typeof StudySessionSchema>
+
+export async function recordStudySession(input: StudySessionInput) {
+  const { userId } = auth()
+  if (!userId) throw new Error('Unauthorized')
+  
+  // Always validate with Zod
+  const validatedData = StudySessionSchema.parse(input)
+  
+  // Use query helper for database operation
+  await recordUserStudySession(userId, validatedData)
+}
+
+// Query Helper (db/queries/sessions.ts)
+import { db, studySessionsTable } from '@/db'
+
+export async function recordUserStudySession(
+  userId: string,
+  sessionData: {
+    deckId: string
+    cardId: string
+    correct: boolean
+    responseTime: number
+  }
+) {
+  await db.insert(studySessionsTable).values({
+    user_id: userId,
+    deck_id: sessionData.deckId,
+    card_id: sessionData.cardId,
+    correct: sessionData.correct,
+    response_time: sessionData.responseTime,
+    timestamp: new Date()
+  })
+}
+
+// Server Component (app/study/[deckId]/page.tsx)
+import { getDeckWithCards } from '@/db/queries/decks'
+import { auth } from '@clerk/nextjs/server'
+
+export default async function StudyPage({ params }: { params: { deckId: string } }) {
+  const { userId } = auth()
+  if (!userId) redirect('/')
+  
+  const deck = await getDeckWithCards(userId, params.deckId)
+  return <StudySession deck={deck} />
+}
+
+// Client Component usage
+'use client'
+export function StudyCard({ card }: { card: Card }) {
+  const handleAnswer = async (correct: boolean) => {
+    await recordStudySession({
+      deckId: card.deck_id,
+      cardId: card.id,
+      correct,
+      responseTime: Date.now() - startTime
+    })
+  }
+}
+```
+
+## Query Helper Organization Examples
+
+```typescript
+// db/queries/decks.ts
+export async function getUserDecks(userId: string) { /* ... */ }
+export async function getDeckById(userId: string, deckId: string) { /* ... */ }
+export async function getDeckWithCards(userId: string, deckId: string) { /* ... */ }
+export async function createDeckForUser(userId: string, deckData: any) { /* ... */ }
+export async function updateUserDeck(userId: string, deckId: string, updates: any) { /* ... */ }
+export async function deleteUserDeck(userId: string, deckId: string) { /* ... */ }
+
+// db/queries/cards.ts
+export async function getCardsByDeck(userId: string, deckId: string) { /* ... */ }
+export async function getCardById(userId: string, cardId: string) { /* ... */ }
+export async function createCardForDeck(userId: string, deckId: string, cardData: any) { /* ... */ }
+export async function updateUserCard(userId: string, cardId: string, updates: any) { /* ... */ }
+export async function deleteUserCard(userId: string, cardId: string) { /* ... */ }
+
+// db/queries/sessions.ts
+export async function recordUserStudySession(userId: string, sessionData: any) { /* ... */ }
+export async function getUserStudyStats(userId: string, deckId?: string) { /* ... */ }
+export async function getRecentSessions(userId: string, limit: number) { /* ... */ }
+```
+
+## Forbidden Patterns
+
+- ❌ Database queries in Client Components
+- ❌ Direct database mutations from Client Components
+- ❌ **Direct database queries in Server Components or Server Actions** - use query helpers
+- ❌ **Raw Drizzle queries outside of `db/queries` directory**
+- ❌ Server Actions without Zod validation
+- ❌ Using `FormData` as parameter type in Server Actions
+- ❌ Using `any` or untyped parameters
+- ❌ Skipping TypeScript type definitions for validated data
+- ❌ **Bypassing query helpers for database operations**
+
+## Required Architecture
+
+1. **Server Components** → Call query helpers from `db/queries`
+2. **Server Actions** → Validate with Zod, then call mutation helpers from `db/queries`
+3. **Query Helpers** → Handle all direct database operations with proper user filtering
+4. **Client Components** → Only call Server Actions, never database operations

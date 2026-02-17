@@ -1,0 +1,99 @@
+---
+description: Clerk Billing for subscriptions and payments - plans, features, access control
+alwaysApply: true
+---
+
+# Clerk Billing - Subscriptions and Payments
+
+This app uses **Clerk Billing** for all subscriptions and payments. Plans and features are managed in the [Clerk Dashboard](https://dashboard.clerk.com/~/billing).
+
+## Plans
+
+| Plan ID      | Description   |
+|-------------|---------------|
+| `free_user` | Free tier     |
+| `pro_plan`  | Paid premium  |
+
+## Features
+
+| Feature ID        | Description                    |
+|-------------------|--------------------------------|
+| `3_deck_limit`    | Free tier deck limit (3 decks) |
+| `Unlimited deck`  | Unlimited decks (Pro)          |
+| `AI-generated deck` | AI-generated flashcards (Pro) |
+
+## Access Control
+
+Use `has()` for **server-side** checks (Server Components, Server Actions). Use `<Protect>` for **client UI** (hide/show content by plan or feature).
+
+### Server-Side: `has()`
+
+```tsx
+// app/premium-content/page.tsx
+import { auth } from '@clerk/nextjs/server'
+
+export default async function ProContentPage() {
+  const { has } = await auth()
+
+  const hasProPlan = has({ plan: 'pro_plan' })
+  if (!hasProPlan) return <h1>Upgrade to Pro to access this content.</h1>
+
+  const hasUnlimitedDecks = has({ feature: 'Unlimited deck' })
+  const hasAiGeneratedDecks = has({ feature: 'AI-generated deck' })
+
+  return (
+    <>
+      {hasUnlimitedDecks && <UnlimitedDecksSection />}
+      {hasAiGeneratedDecks && <AiGeneratedDecksSection />}
+    </>
+  )
+}
+```
+
+### Client UI: `<Protect>`
+
+```tsx
+// Protect by plan
+import { Protect } from '@clerk/nextjs'
+
+<Protect
+  plan="pro_plan"
+  fallback={<p>Upgrade to Pro to unlock this feature.</p>}
+>
+  <ProOnlyContent />
+</Protect>
+
+// Protect by feature
+<Protect
+  feature="ai_generated_deck"
+  fallback={<p>AI-generated decks require a Pro subscription.</p>}
+>
+  <AiDeckGenerator />
+</Protect>
+```
+
+## Pricing Page
+
+Use `<PricingTable />` on a dedicated pricing route:
+
+```tsx
+// app/pricing/page.tsx
+import { PricingTable } from '@clerk/nextjs'
+
+export default function PricingPage() {
+  return (
+    <div style={{ maxWidth: '800px', margin: '0 auto', padding: '0 1rem' }}>
+      <PricingTable />
+    </div>
+  )
+}
+```
+
+Use shadcn/ui Card or layout components for styling, per project rules.
+
+## Feature Gating by Plan
+
+- **free_user**: `3_deck_limit` (max 3 decks)
+- **pro_plan**: `Unlimited deck`, `AI-generated deck`
+
+Gate deck creation, AI generation, and upgrade prompts using `has({ plan: 'pro_plan' })` or `has({ feature: '...' })` as appropriate.

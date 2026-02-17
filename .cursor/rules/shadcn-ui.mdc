@@ -1,0 +1,190 @@
+---
+alwaysApply: true
+---
+# shadcn/ui Component Library - STRICT ENFORCEMENT
+
+This project uses **EXCLUSIVELY** shadcn/ui for ALL UI elements. **NO CUSTOM UI COMPONENTS ARE ALLOWED.**
+
+## ABSOLUTE RULES - NO EXCEPTIONS
+
+1. **NEVER create custom UI elements** - Always use shadcn/ui components
+2. **NEVER use raw HTML elements** for UI (div, button, input, etc.)
+3. **NEVER use custom CSS classes** for styling - use shadcn/ui variants and compositions
+4. **NEVER create custom styled components** - use existing shadcn/ui components
+5. **If a component doesn't exist in shadcn/ui, install it first**
+
+## Initial Setup
+
+If shadcn/ui is not initialized in the project, run:
+
+```bash
+npx shadcn@latest create
+```
+
+## Adding Components
+
+When you need ANY UI element that's not installed, you MUST use:
+
+```bash
+npx shadcn@latest add [component-name]
+```
+
+**Required Components for this Project:**
+```bash
+npx shadcn@latest add button
+npx shadcn@latest add card
+npx shadcn@latest add input
+npx shadcn@latest add dialog
+npx shadcn@latest add form
+npx shadcn@latest add label
+npx shadcn@latest add toast
+npx shadcn@latest add badge
+npx shadcn@latest add sheet
+npx shadcn@latest add table
+```
+
+## Mandatory Usage Guidelines
+
+- **EXCLUSIVELY use shadcn/ui components** - zero tolerance for custom UI
+- **Import from the components directory** (`@/components/ui/`)
+- **Use component variants** instead of custom styling
+- **Compose existing components** rather than creating new ones
+
+## Clerk Authentication Integration
+
+For Clerk sign-in and sign-up functionality, **ALWAYS** use shadcn/ui buttons with Clerk modals:
+
+```tsx
+// ✅ REQUIRED PATTERN - Clerk with shadcn/ui Button and Modal
+import { Button } from "@/components/ui/button"
+import { SignInButton, SignUpButton } from "@clerk/nextjs"
+
+export function AuthButtons() {
+  return (
+    <>
+      <SignInButton mode="modal">
+        <Button variant="default">Sign In</Button>
+      </SignInButton>
+      
+      <SignUpButton mode="modal">
+        <Button variant="outline">Sign Up</Button>
+      </SignUpButton>
+    </>
+  )
+}
+
+// ❌ FORBIDDEN - Custom buttons or non-modal Clerk components
+export function AuthButtons() {
+  return (
+    <>
+      <SignInButton>
+        <button className="custom-button">Sign In</button> {/* NEVER DO THIS */}
+      </SignInButton>
+      
+      <SignInButton mode="redirect"> {/* NEVER USE REDIRECT MODE */}
+        <Button>Sign In</Button>
+      </SignInButton>
+    </>
+  )
+}
+```
+
+## Example Usage Patterns
+
+```tsx
+// ✅ REQUIRED - Only shadcn/ui components
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+
+export function MyComponent() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Example Form</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <Label htmlFor="email">Email</Label>
+          <Input id="email" type="email" />
+        </div>
+        <Button variant="default">Submit</Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ❌ ABSOLUTELY FORBIDDEN - Any custom UI elements
+export function MyComponent() {
+  return (
+    <div className="border rounded-lg p-4"> {/* NEVER USE RAW DIVS */}
+      <h2 className="text-lg font-bold">Example</h2> {/* NEVER USE RAW H2 */}
+      <input className="border p-2" /> {/* NEVER USE RAW INPUTS */}
+      <button className="bg-blue-500 text-white px-4 py-2 rounded"> {/* NEVER USE RAW BUTTONS */}
+        Click me
+      </button>
+    </div>
+  )
+}
+
+// ❌ FORBIDDEN - Custom styled components
+const CustomButton = styled.button`
+  background: blue;
+  color: white;
+` // NEVER CREATE CUSTOM STYLED COMPONENTS
+
+// ❌ FORBIDDEN - Custom CSS classes for UI
+<div className="my-custom-card border-2 shadow-lg"> {/* NEVER USE CUSTOM UI CLASSES */}
+```
+
+## Required Components for This Project
+
+**ONLY** use these shadcn/ui components - install any missing ones immediately:
+
+### Core UI Components
+- `button` - ALL buttons (including Clerk auth buttons)
+- `card` - ALL content containers
+- `input` - ALL form inputs
+- `label` - ALL form labels
+- `form` - ALL form handling
+- `dialog` - ALL modals and dialogs
+- `sheet` - ALL slide-out panels
+- `toast` - ALL notifications
+- `badge` - ALL status indicators
+- `table` - ALL data tables
+
+### Layout & Navigation
+- `separator` - Dividers and separators
+- `scroll-area` - Scrollable content areas
+- `tabs` - Tab navigation
+- `breadcrumb` - Navigation breadcrumbs
+
+### Advanced Components
+- `dropdown-menu` - Dropdown menus
+- `select` - Select dropdowns
+- `checkbox` - Checkboxes
+- `radio-group` - Radio buttons
+- `switch` - Toggle switches
+- `slider` - Range sliders
+- `progress` - Progress indicators
+- `skeleton` - Loading placeholders
+
+## Enforcement Rules
+
+1. **Before creating ANY UI element**, check if shadcn/ui has it
+2. **If it exists in shadcn/ui**, install and use it
+3. **If it doesn't exist**, compose existing components
+4. **NEVER create custom UI** under any circumstances
+5. **Use `mode="modal"` for ALL Clerk authentication components**
+
+## Violations Will Be Rejected
+
+Any code containing:
+- Raw HTML elements for UI (div, button, input, etc.)
+- Custom CSS classes for styling
+- Custom styled components
+- Non-shadcn/ui UI libraries
+- Clerk components without `mode="modal"`
+
+**Will be immediately rejected and must be rewritten using shadcn/ui components.**

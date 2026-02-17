@@ -1,0 +1,148 @@
+---
+alwaysApply: false
+---
+# Clerk Authentication & Data Security
+
+All authentication is handled by Clerk. Users must only access their own data and be prevented from accessing data belonging to other users.
+
+## Protected Route Handling
+
+When users try to access protected pages without authentication, redirect them to the homepage (`/`) where the sign-in/sign-up buttons are available. This app does not have a dedicated sign-in page.
+
+```typescript
+// ✅ GOOD - Redirect unauthenticated users to homepage
+import { auth } from '@clerk/nextjs/server'
+import { redirect } from 'next/navigation'
+
+export default async function ProtectedPage() {
+  const { userId } = auth()
+  
+  if (!userId) {
+    redirect('/') // Redirect to homepage where auth buttons are
+  }
+  
+  // Continue with protected content
+}
+
+// ❌ BAD - Don't redirect to non-existent sign-in page
+export default async function ProtectedPage() {
+  const { userId } = auth()
+  
+  if (!userId) {
+    redirect('/sign-in') // This page doesn't exist!
+  }
+}
+```
+
+## Required Patterns
+
+### 1. Always Get User ID from Clerk
+
+```typescript
+// ✅ GOOD - Get user ID from Clerk auth
+import { auth } from '@clerk/nextjs/server'
+
+export async function GET() {
+  const { userId } = auth()
+  
+  if (!userId) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+  
+  // Use userId for data filtering
+  const userDecks = await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.user_id, userId))
+}
+
+// ❌ BAD - Never trust user-provided IDs
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const userId = searchParams.get('userId') // NEVER DO THIS
+}
+```
+
+### 2. Filter All Database Queries by User ID
+
+```typescript
+// ✅ GOOD - Always filter by authenticated user
+const { userId } = auth()
+const deck = await db
+  .select()
+  .from(decksTable)
+  .where(and(
+    eq(decksTable.id, deckId),
+    eq(decksTable.user_id, userId) // Critical: user can only access their data
+  ))
+
+// ❌ BAD - Missing user filter allows data leakage
+const deck = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.id, deckId)) // Missing user_id check!
+```
+
+### 3. Validate Ownership Before Updates/Deletes
+
+```typescript
+// ✅ GOOD - Verify ownership before modification
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const { userId } = auth()
+  
+  if (!userId) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+  
+  // First check if user owns the resource
+  const deck = await db
+    .select()
+    .from(decksTable)
+    .where(and(
+      eq(decksTable.id, params.id),
+      eq(decksTable.user_id, userId)
+    ))
+  
+  if (deck.length === 0) {
+    return new Response('Not found', { status: 404 })
+  }
+  
+  // Now safe to delete
+  await db.delete(decksTable).where(eq(decksTable.id, params.id))
+}
+```
+
+### 4. Handle Unauthorized Access Properly
+
+```typescript
+// ✅ GOOD - Proper auth error handling
+const { userId } = auth()
+
+if (!userId) {
+  return new Response('Unauthorized', { status: 401 })
+}
+
+// For resources that don't exist OR don't belong to user
+if (result.length === 0) {
+  return new Response('Not found', { status: 404 }) // Don't reveal if resource exists
+}
+```
+
+## Security Checklist
+
+For every API endpoint and database operation:
+
+- [ ] Get `userId` from `auth()` (never from request parameters)
+- [ ] Return 401 if no `userId`
+- [ ] Filter all queries by `user_id` field
+- [ ] Verify ownership before updates/deletes
+- [ ] Return 404 (not 403) for unauthorized resources
+- [ ] Never expose other users' data in responses
+
+## Forbidden Practices
+
+- ❌ Never trust user-provided IDs from request parameters
+- ❌ Never query without user_id filtering
+- ❌ Never assume a resource belongs to the authenticated user
+- ❌ Never return 403 for resources that don't belong to the user (use 404)
+- ❌ Never include other users' data in API responses

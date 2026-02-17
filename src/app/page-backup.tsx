@@ -1,25 +1,14 @@
-/**
- * Home page — FlashCardy landing. UI built with shadcn/ui (Card, Button).
- * Clerk auth: Sign In / Sign Up open modals; signed-in users redirect to dashboard.
- */
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
-
-export const dynamic = "force-dynamic";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { AuthRedirect } from "@/components/auth-redirect";
 
 export default async function Home() {
   const { userId } = await auth();
 
+  // If user is authenticated, redirect to dashboard
   if (userId) {
     redirect("/dashboard");
   }
@@ -37,6 +26,7 @@ export default async function Home() {
               Your personal flashcard platform
             </CardDescription>
           </CardHeader>
+          
           <CardContent className="space-y-4">
             <SignInButton mode="modal">
               <Button variant="outline" size="lg" className="w-full">

@@ -1,0 +1,41 @@
+---
+description: Vercel AI SDK usage for AI flashcard generation with OpenAI
+globs: src/app/actions/**/*.ts,src/lib/**/*.ts
+alwaysApply: false
+---
+
+# Vercel AI - Flashcard Generation
+
+This project uses the **Vercel AI SDK** (`ai` npm package) with **OpenAI** for AI features, specifically the AI flashcard generation feature.
+
+## Pattern: Generating Structured Flashcards
+
+Use `generateObject` with `output: 'array'` to produce an array of flashcards. Define the schema for each card (front/back); the prompt controls the count and topic.
+
+```typescript
+import { generateObject } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
+
+const cardCount = 10;
+const topic = 'Indonesian language basics';
+
+const { object } = await generateObject({
+  model: openai('gpt-4o'),
+  output: 'array',
+  schema: z.object({
+    front: z.string().describe('Question or term on the front of the card'),
+    back: z.string().describe('Answer or definition on the back of the card'),
+  }),
+  prompt: `Generate ${cardCount} flashcards about "${topic}". Each card should have a front (question/term) and back (answer/definition).`,
+});
+
+// object is an array of { front: string; back: string }
+const cards = object as Array<{ front: string; back: string }>;
+```
+
+## Notes
+
+- Install: `ai` and `@ai-sdk/openai` packages
+- Use Zod schemas with `z.object()` for card shape; `output: 'array'` yields an array of those objects
+- Prefer Server Actions for generation; validate output with Zod before inserting into `cardsTable` via query helpers

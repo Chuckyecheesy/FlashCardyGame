@@ -1,0 +1,140 @@
+---
+description: Database interactions must always use Drizzle schema and queries
+alwaysApply: true
+---
+
+# Drizzle Database Interactions
+
+All database operations must use the established Drizzle ORM setup with proper schema imports and type-safe queries.
+
+## Required Imports
+
+Always import from the centralized database module:
+
+```typescript
+// ✅ GOOD - Import db and schema from centralized module
+import { db, decksTable, cardsTable, studySessionsTable, cardStatsTable } from '@/db'
+
+// ❌ BAD - Don't create separate database connections
+import { drizzle } from 'drizzle-orm/neon-http'
+```
+
+## Schema Tables
+
+Use the predefined schema tables for all database operations:
+
+- `decksTable` - Flashcard decks (title, description, user_id, is_public)
+- `cardsTable` - Individual flashcards (front, back, deck_id, order)
+- `studySessionsTable` - Study session tracking (user_id, deck_id, card_id, correct, response_time)
+- `cardStatsTable` - Card performance statistics (user_id, card_id, correct_count, incorrect_count, difficulty)
+
+## Query Examples
+
+### Select Operations
+
+```typescript
+// ✅ GOOD - Type-safe select with proper imports
+import { db, decksTable } from '@/db'
+import { eq } from 'drizzle-orm'
+
+const userDecks = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.user_id, userId))
+
+// ✅ GOOD - Select specific columns
+const deckTitles = await db
+  .select({ id: decksTable.id, title: decksTable.title })
+  .from(decksTable)
+  .where(eq(decksTable.is_public, true))
+```
+
+### Insert Operations
+
+```typescript
+// ✅ GOOD - Type-safe insert
+import { db, cardsTable } from '@/db'
+
+const newCard = await db
+  .insert(cardsTable)
+  .values({
+    front: "What is the capital of France?",
+    back: "Paris",
+    deck_id: deckId,
+    order: 1
+  })
+  .returning()
+
+// ❌ BAD - Raw SQL queries
+await db.execute(sql`INSERT INTO flashcard_cards...`)
+```
+
+### Update Operations
+
+```typescript
+// ✅ GOOD - Type-safe update
+import { db, cardStatsTable } from '@/db'
+import { eq, and } from 'drizzle-orm'
+
+await db
+  .update(cardStatsTable)
+  .set({ 
+    correct_count: sql`${cardStatsTable.correct_count} + 1`,
+    last_studied: new Date()
+  })
+  .where(and(
+    eq(cardStatsTable.user_id, userId),
+    eq(cardStatsTable.card_id, cardId)
+  ))
+```
+
+### Joins and Relations
+
+```typescript
+// ✅ GOOD - Proper joins using schema references
+import { db, decksTable, cardsTable } from '@/db'
+import { eq } from 'drizzle-orm'
+
+const decksWithCards = await db
+  .select({
+    deckId: decksTable.id,
+    deckTitle: decksTable.title,
+    cardId: cardsTable.id,
+    cardFront: cardsTable.front,
+    cardBack: cardsTable.back
+  })
+  .from(decksTable)
+  .leftJoin(cardsTable, eq(decksTable.id, cardsTable.deck_id))
+  .where(eq(decksTable.user_id, userId))
+```
+
+## Error Handling
+
+Always wrap database operations in proper error handling:
+
+```typescript
+// ✅ GOOD - Proper error handling
+try {
+  const result = await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.id, deckId))
+  
+  if (result.length === 0) {
+    throw new Error('Deck not found')
+  }
+  
+  return result[0]
+} catch (error) {
+  console.error('Database query failed:', error)
+  throw new Error('Failed to fetch deck')
+}
+```
+
+## Forbidden Practices
+
+- ❌ Don't use raw SQL queries unless absolutely necessary
+- ❌ Don't create separate database connections
+- ❌ Don't bypass the schema types
+- ❌ Don't use string-based table names instead of schema objects
+- ❌ Don't forget to handle potential null/undefined results
