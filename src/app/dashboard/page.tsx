@@ -8,14 +8,18 @@ import { getUserDashboardStats } from "@/db/queries/stats";
 import { CreateDeckDialogClient } from "@/components/create-deck-dialog-client";
 import { DeleteDeckDialogClient } from "@/components/delete-deck-dialog-client";
 
+const FREE_PLAN_DECK_LIMIT = 3;
+
 export default async function DashboardPage() {
-  const { userId } = await auth();
+  const { userId, has } = await auth();
 
   if (!userId) {
     redirect("/");
   }
 
+  const hasProPlan = has?.({ plan: "pro_plan" }) ?? false;
   const { totalDecks, totalCards, studiedCards: cardsStudied, userDecks } = await getUserDashboardStats(userId);
+  const atDeckLimit = !hasProPlan && totalDecks >= FREE_PLAN_DECK_LIMIT;
 
   return (
     <div className="min-h-screen bg-background">
@@ -32,6 +36,26 @@ export default async function DashboardPage() {
               <Badge variant="secondary">🎯 Ready to Learn</Badge>
             </div>
           </div>
+
+          {!hasProPlan && (
+            <Card className="border-primary/50 bg-primary/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Badge variant="secondary">Free plan</Badge>
+                  Deck limit: {totalDecks} / {FREE_PLAN_DECK_LIMIT}
+                </CardTitle>
+                <CardDescription>
+                  You're on the Free plan. You can create up to {FREE_PLAN_DECK_LIMIT} study sets.
+                  Want <strong>unlimited decks</strong> and <strong>AI-generated flashcards</strong>? Upgrade to Pro.
+                </CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <Button asChild>
+                  <Link href="/pricing">Upgrade to Pro →</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card>
@@ -79,17 +103,31 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <CreateDeckDialogClient>
-                  <Button className="h-auto p-6 flex flex-col items-start space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-lg">➕</span>
-                      <span className="font-semibold">Create Study Set</span>
-                    </div>
-                    <span className="text-sm text-left opacity-80">
-                      Start by creating your first collection of flashcards
-                    </span>
+                {atDeckLimit ? (
+                  <Button asChild variant="outline" className="h-auto p-6 flex flex-col items-start space-y-2 opacity-90">
+                    <Link href="/pricing" className="text-left">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">➕</span>
+                        <span className="font-semibold">Create Study Set</span>
+                      </div>
+                      <span className="text-sm text-left opacity-80 block">
+                        Free limit reached (3 decks). Upgrade to Pro for unlimited decks.
+                      </span>
+                    </Link>
                   </Button>
-                </CreateDeckDialogClient>
+                ) : (
+                  <CreateDeckDialogClient>
+                    <Button className="h-auto p-6 flex flex-col items-start space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg">➕</span>
+                        <span className="font-semibold">Create Study Set</span>
+                      </div>
+                      <span className="text-sm text-left opacity-80">
+                        Start by creating your first collection of flashcards
+                      </span>
+                    </Button>
+                  </CreateDeckDialogClient>
+                )}
                 <Button variant="outline" className="h-auto p-6 flex flex-col items-start space-y-2">
                   <div className="flex items-center space-x-2">
                     <span className="text-lg">📊</span>
@@ -109,7 +147,7 @@ export default async function DashboardPage() {
               <CardDescription>
                 {totalDecks === 0
                   ? "Create your first study set to get started with learning."
-                  : `You have ${totalDecks} study set${totalDecks === 1 ? "" : "s"} ready for learning.`}
+                  : `You have ${totalDecks} study set${totalDecks === 1 ? "" : "s"} ready for learning.${!hasProPlan ? ` (${totalDecks} / ${FREE_PLAN_DECK_LIMIT} on Free plan)` : ""}`}
               </CardDescription>
             </CardHeader>
             <CardContent>
